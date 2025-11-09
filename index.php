@@ -24,3 +24,4 @@
 require_once('config.php');
 
 throw new \core\exception\moodle_exception('rootdirpublic', 'error');
+echo 'test';
