@@ -1,0 +1,27 @@
+name: Deploy to dev (SSH)   # 👈 اسم الـ Action (اختياري، ما يؤثر)
+
+on:
+  push:
+    branches:
+      - dev   # 👈 عدّلها لو تستخدم branch آخر (مثلاً: main أو test)
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Deploy to AWS Ubuntu Server via SSH
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SERVER_IP }}        # 👈 لا تعدلها هنا، عدلها من Settings → Secrets
+          username: ${{ secrets.SERVER_USER }}  # 👈 لا تعدلها هنا، عدلها من Secrets
+          key: ${{ secrets.SERVER_SSH_KEY }}    # 👈 لا تعدلها هنا، عدلها من Secrets
+          script: |
+            cd /var/www/moodle                  # 👈 هذا هو المسار داخل السيرفر — عدّله لمسار مشروعك
+            git fetch origin dev                # 👈 عدّل "dev" لو تستخدم برانش آخر
+            git reset --hard origin/dev         # 👈 نفس الشيء، لو برانشك اسمه مختلف
+            sudo systemctl reload apache2       # 👈 لو تستخدم nginx، غيّرها إلى:
+                                                # sudo systemctl reload nginx
