@@ -1,27 +1,66 @@
-name: Deploy to dev (SSH)   # 👈 اسم الـ Action (اختياري، ما يؤثر)
+name: Deploy to  staging server
+run-name: Deploy Moodle (dev) branch to  server
 
 on:
   push:
-    branches:
-      - dev   # 👈 عدّلها لو تستخدم branch آخر (مثلاً: main أو test)
+    branches: [dev]
+  workflow_dispatch:
 
 jobs:
-  deploy:
+  deploy-to-ubuntu:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: 🛠️ Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          printf "%s" "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -T 10 -p 22 54.91.141.135 >> ~/.ssh/known_hosts || true
 
-      - name: Deploy to AWS Ubuntu Server via SSH
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ secrets.SERVER_IP }}        # 👈 لا تعدلها هنا، عدلها من Settings → Secrets
-          username: ${{ secrets.SERVER_USER }}  # 👈 لا تعدلها هنا، عدلها من Secrets
-          key: ${{ secrets.SERVER_SSH_KEY }}    # 👈 لا تعدلها هنا، عدلها من Secrets
-          script: |
-            cd /var/www/moodle                  # 👈 هذا هو المسار داخل السيرفر — عدّله لمسار مشروعك
-            git fetch origin dev                # 👈 عدّل "dev" لو تستخدم برانش آخر
-            git reset --hard origin/dev         # 👈 نفس الشيء، لو برانشك اسمه مختلف
-            sudo systemctl reload apache2       # 👈 لو تستخدم nginx، غيّرها إلى:
-                                                # sudo systemctl reload nginx
+      - name: 🚀 Deploy to Ubuntu Server 24
+        run: |
+          ssh -T -i ~/.ssh/id_rsa -p 22 -o StrictHostKeyChecking=no root@54.91.141.135 << 'EOF'
+
+          set -e
+          APP_PATH="/var/www/moodle"
+          PHP_BIN="/usr/bin/php8.1"
+
+          echo "🚀 Starting deployment to Ubuntu 24..."
+          cd $APP_PATH
+
+          echo "📥 Pulling latest Moodle code..."
+          git fetch origin dev && git reset --hard origin/dev || true
+
+          # Check Composer
+          if [ ! -x "$(command -v composer)" ]; then
+            echo "Installing Composer..."
+            curl -sS https://getcomposer.org/installer | $PHP_BIN
+            mv composer.phar /usr/local/bin/composer
+          fi
+
+          echo "📦 Installing PHP dependencies..."
+          composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader || true
+
+          echo "🔧 Enabling Moodle maintenance mode..."
+          $PHP_BIN admin/cli/maintenance.php --enable || true
+
+          echo "🗄️ Running Moodle upgrade..."
+          $PHP_BIN admin/cli/upgrade.php --non-interactive --allow-unstable || true
+
+          echo "🧹 Purging Moodle caches..."
+          $PHP_BIN admin/cli/purge_caches.php || true
+
+          echo "🔐 Fixing file permissions..."
+          chown -R www-data:www-data $APP_PATH
+          find $APP_PATH -type f -exec chmod 644 {} \;
+          find $APP_PATH -type d -exec chmod 755 {} \;
+
+          echo "♻️ Restarting PHP-FPM..."
+          systemctl reload php8.1-fpm || true
+
+          echo "🚀 Disabling maintenance mode..."
+          $PHP_BIN admin/cli/maintenance.php --disable || true
+
+          echo "✅ Deployment completed successfully! 🎉"
+          EOF
