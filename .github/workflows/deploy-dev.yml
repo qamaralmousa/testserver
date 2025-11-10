@@ -1,0 +1,54 @@
+name: Deploy to dev (SSH)
+
+on:
+  push:
+    branches: [ "dev" ]
+
+jobs:
+  deploy:
+    name: Deploy to AWS Ubuntu Server
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.1
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        env:
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" bash -e <<'EOF'
+            set -e
+            echo "=== Starting deploy on server ==="
+            cd "$DEPLOY_PATH"
+
+            # Ensure git is clean and on dev branch
+            git fetch origin dev
+            git reset --hard origin/dev
+
+            # Optional: install/update dependencies
+            if [ -f composer.json ]; then
+              composer install --no-dev --optimize-autoloader
+            fi
+
+            # Optional: clear Moodle caches
+            # php admin/cli/purge_caches.php || true
+
+            sudo systemctl reload apache2 || true
+            sudo systemctl reload php*-fpm || true
+
+            echo "=== Deployment complete ==="
+          EOF
