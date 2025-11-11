@@ -14,7 +14,7 @@ jobs:
       - name: 🛠️ Setup SSH Key
         run: |
           mkdir -p ~/.ssh
-          printf "%s" "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          printf "%s" "${{ secrets.SSH__KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -T 10 -p 22 44.211.228.79 >> ~/.ssh/known_hosts || true
 
@@ -23,7 +23,7 @@ jobs:
           ssh -T -i ~/.ssh/id_rsa -p 22 -o StrictHostKeyChecking=no root@44.211.228.79 << 'EOF'
 
           set -e
-          APP_PATH="/var/www/html/joramco"
+          APP_PATH="/var/www/html/moodle"
           PHP_BIN="/usr/bin/php8.1"
 
           echo "🚀 Starting deployment to Ubuntu 24..."
