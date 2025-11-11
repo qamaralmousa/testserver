@@ -1,0 +1,66 @@
+name: Deploy to test_server server
+run-name: Deploy Moodle (dev) branch to kbeams server
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+jobs:
+  deploy-to-ubuntu:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🛠️ Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          printf "%s" "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -T 10 -p 22 44.211.228.79 >> ~/.ssh/known_hosts || true
+
+      - name: 🚀 Deploy to Ubuntu Server 24
+        run: |
+          ssh -T -i ~/.ssh/id_rsa -p 22 -o StrictHostKeyChecking=no root@44.211.228.79 << 'EOF'
+
+          set -e
+          APP_PATH="/var/www/html/joramco"
+          PHP_BIN="/usr/bin/php8.1"
+
+          echo "🚀 Starting deployment to Ubuntu 24..."
+          cd $APP_PATH
+
+          echo "📥 Pulling latest Moodle code..."
+          git fetch origin dev && git reset --hard origin/dev || true
+
+          # Check Composer
+          if [ ! -x "$(command -v composer)" ]; then
+            echo "Installing Composer..."
+            curl -sS https://getcomposer.org/installer | $PHP_BIN
+            mv composer.phar /usr/local/bin/composer
+          fi
+
+          echo "📦 Installing PHP dependencies..."
+          composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader || true
+
+          echo "🔧 Enabling Moodle maintenance mode..."
+          $PHP_BIN admin/cli/maintenance.php --enable || true
+
+          echo "🗄️ Running Moodle upgrade..."
+          $PHP_BIN admin/cli/upgrade.php --non-interactive --allow-unstable || true
+
+          echo "🧹 Purging Moodle caches..."
+          $PHP_BIN admin/cli/purge_caches.php || true
+
+          echo "🔐 Fixing file permissions..."
+          chown -R www-data:www-data $APP_PATH
+          find $APP_PATH -type f -exec chmod 644 {} \;
+          find $APP_PATH -type d -exec chmod 755 {} \;
+
+          echo "♻️ Restarting PHP-FPM..."
+          systemctl reload php8.1-fpm || true
+
+          echo "🚀 Disabling maintenance mode..."
+          $PHP_BIN admin/cli/maintenance.php --disable || true
+
+          echo "✅ Deployment completed successfully! 🎉"
+          EOF
