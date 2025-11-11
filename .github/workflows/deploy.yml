@@ -1,66 +1,31 @@
-name: Deploy to  staging server
-run-name: Deploy Moodle (dev) branch to  server
+name: Deploy to Ubuntu Server
 
 on:
   push:
-    branches: [dev]
-  workflow_dispatch:
+    branches: [main]  # أي push على dev branch
 
 jobs:
-  deploy-to-ubuntu:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 🛠️ Setup SSH Key
+      # 1️⃣ checkout code (ليتسنى لك استخدام أي ملفات إذا لزم)
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2️⃣ إعداد SSH للاتصال بالسيرفر
+      - name: Setup SSH
         run: |
           mkdir -p ~/.ssh
-          printf "%s" "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -T 10 -p 22 54.91.141.135 >> ~/.ssh/known_hosts || true
+          ssh-keyscan -p 22 your.server.ip >> ~/.ssh/known_hosts
 
-      - name: 🚀 Deploy to Ubuntu Server 24
+      # 3️⃣ الاتصال بالسيرفر وتنفيذ git pull
+      - name: Pull latest code on server
         run: |
-          ssh -T -i ~/.ssh/id_rsa -p 22 -o StrictHostKeyChecking=no root@54.91.141.135 << 'EOF'
-
-          set -e
-          APP_PATH="/var/www/moodle"
-          PHP_BIN="/usr/bin/php8.1"
-
-          echo "🚀 Starting deployment to Ubuntu 24..."
-          cd $APP_PATH
-
-          echo "📥 Pulling latest Moodle code..."
-          git fetch origin dev && git reset --hard origin/dev || true
-
-          # Check Composer
-          if [ ! -x "$(command -v composer)" ]; then
-            echo "Installing Composer..."
-            curl -sS https://getcomposer.org/installer | $PHP_BIN
-            mv composer.phar /usr/local/bin/composer
-          fi
-
-          echo "📦 Installing PHP dependencies..."
-          composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader || true
-
-          echo "🔧 Enabling Moodle maintenance mode..."
-          $PHP_BIN admin/cli/maintenance.php --enable || true
-
-          echo "🗄️ Running Moodle upgrade..."
-          $PHP_BIN admin/cli/upgrade.php --non-interactive --allow-unstable || true
-
-          echo "🧹 Purging Moodle caches..."
-          $PHP_BIN admin/cli/purge_caches.php || true
-
-          echo "🔐 Fixing file permissions..."
-          chown -R www-data:www-data $APP_PATH
-          find $APP_PATH -type f -exec chmod 644 {} \;
-          find $APP_PATH -type d -exec chmod 755 {} \;
-
-          echo "♻️ Restarting PHP-FPM..."
-          systemctl reload php8.1-fpm || true
-
-          echo "🚀 Disabling maintenance mode..."
-          $PHP_BIN admin/cli/maintenance.php --disable || true
-
-          echo "✅ Deployment completed successfully! 🎉"
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no ubuntu@your.server.ip << 'EOF'
+            cd /var/www/html/moodle
+            git fetch origin dev
+            git reset --hard origin/dev
           EOF
