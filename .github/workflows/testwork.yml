@@ -30,6 +30,6 @@ jobs:
           port: ${{ secrets.SSH_PORT }}        # عادة 22 أو المنفذ المخصص
           script: |
             echo "Connected to server!"
-            cd /var/www/html/joramco   # مسار مشروعك على السيرفر
+            cd /var/www/html/moodle   # مسار مشروعك على السيرفر
             git pull
             echo "Server updated successfully"
