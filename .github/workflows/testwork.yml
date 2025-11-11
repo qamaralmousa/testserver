@@ -1,0 +1,35 @@
+name: Push & Deploy to Server
+
+on:
+  push:
+    branches:
+      - main   # أي push على فرع main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ نسخ الكود
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # 2️⃣ عرض الملفات على GitHub Actions
+      - name: Show changes
+        run: |
+          echo "Files changed in this push:"
+          git diff --name-only HEAD~1 HEAD
+
+      # 3️⃣ تنفيذ أوامر على السيرفر عبر SSH
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v0.1.9
+        with:
+          host: ${{ secrets.SSH_HOST }}        # IP السيرفر
+          username: ${{ secrets.SSH_USER }}    # اسم المستخدم (ubuntu)
+          key: ${{ secrets.SSH_KEY }}  # المفتاح الخاص
+          port: ${{ secrets.SSH_PORT }}        # عادة 22 أو المنفذ المخصص
+          script: |
+            echo "Connected to server!"
+            cd /var/www/html/moodle   # مسار مشروعك على السيرفر
+            git pull
+            echo "Server updated successfully"
