@@ -20,7 +20,7 @@ jobs:
 
       - name: 🚀 Deploy to Ubuntu Server 24
         run: |
-          ssh -T -i ~/.ssh/id_rsa -p 22 -o StrictHostKeyChecking=no root@44.211.228.79 << 'EOF'
+          ssh -T -i ~/.ssh/id_rsa -p 22 -o StrictHostKeyChecking=no ubuntu@44.211.228.79 << 'EOF'
 
           set -e
           APP_PATH="/var/www/html/moodle"
